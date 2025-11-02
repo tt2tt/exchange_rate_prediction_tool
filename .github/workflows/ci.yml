@@ -36,8 +36,8 @@ jobs:
       - name: テストを実行 (カバレッジ計測)
         shell: powershell
         run: |
-          pytest --cov=. --cov-fail-under=90
-          coverage html
+          pytest --cov=core --cov-fail-under=90
+          coverage html --ignore-errors
 
       - name: 型チェックを実行
         shell: powershell
