@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  ci:
+    runs-on: windows-latest
+
+    steps:
+      - name: コードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存関係をインストール
+        shell: powershell
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path 'requirements-dev.txt') {
+            pip install -r requirements-dev.txt
+          } elseif (Test-Path 'requirements.txt') {
+            pip install -r requirements.txt
+          }
+
+      - name: テストを実行
+        shell: powershell
+        run: pytest
+
+      - name: 型チェックを実行
+        shell: powershell
+        run: mypy .
+
+      - name: デプロイ（仮実装）
+        if: startsWith(github.ref, 'refs/heads/develop') || startsWith(github.ref, 'refs/heads/main')
+        shell: powershell
+        run: echo "デプロイ処理は今後実装予定です"
+
+      - name: リリース（仮実装）
+        if: github.ref == 'refs/heads/main'
+        shell: powershell
+        run: echo "リリース処理は今後実装予定です"

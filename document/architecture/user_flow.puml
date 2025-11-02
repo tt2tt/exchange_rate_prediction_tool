@@ -1,0 +1,35 @@
+@startuml user_flow
+' 想定ユーザーの操作フロー
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam linetype ortho
+skinparam defaultTextAlignment left
+
+start
+:アプリ起動;
+:メインウィンドウ表示;
+:CSVファイルを選択;
+if (必須カラム揃っているか?) then (Yes)
+  :データ読込ログ出力;
+else (No)
+  :エラーダイアログ表示;
+  stop
+endif
+
+repeat
+  :ラグLとスプレッドSを入力;
+  while (入力値妥当?) is (No)
+    :入力エラーを表示し再入力促す;
+    :ラグLとスプレッドSを入力;
+  endwhile (Yes)
+
+  :「実行」ボタン押下;
+  :進捗表示開始 (前処理→特徴量→学習→評価→バックテスト);
+  :結果をUIに表示;
+  :ログ・モデル・バックテスト結果を保存;
+repeat while (追加分析を行う?) is (Yes)
+
+:アプリを終了;
+stop
+
+@enduml
