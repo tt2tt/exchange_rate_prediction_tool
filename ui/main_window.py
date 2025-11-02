@@ -26,6 +26,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+
 from core.data.validator import DataValidator
 from core.data.preprocessing.pipeline import PreprocessingPipeline
 from core.features import FeatureEngineer
@@ -54,6 +57,7 @@ class ExecutionSummary:
     prediction_result: PredictionResult
     backtest_result: BacktestResult
     export_path: Path
+    chart_dataframe: DataFrame
 
 
 class MainWindow(QMainWindow):
@@ -188,9 +192,19 @@ class MainWindow(QMainWindow):
         self.backtest_label.setWordWrap(True)
         result_layout.addWidget(self.backtest_label)
 
+        # チャート表示用の領域を構築する
+        chart_group = QGroupBox("ミニチャート")
+        chart_layout = QVBoxLayout()
+        chart_group.setLayout(chart_layout)
+
+        self.chart_figure = Figure(figsize=(5.0, 3.0), tight_layout=True)
+        self.chart_canvas = FigureCanvasQTAgg(self.chart_figure)
+        chart_layout.addWidget(self.chart_canvas)
+
         self._root_layout.addWidget(progress_group)
         self._root_layout.addWidget(log_group)
         self._root_layout.addWidget(result_group)
+        self._root_layout.addWidget(chart_group)
         self._root_layout.addStretch(1)
 
     def _connect_signals(self) -> None:
@@ -298,6 +312,8 @@ class MainWindow(QMainWindow):
         self.training_label.setText("学習結果は未実行です。")
         self.prediction_label.setText("予測結果は未実行です。")
         self.backtest_label.setText("バックテスト結果は未実行です。")
+        self.chart_figure.clear()
+        self.chart_canvas.draw()
 
     def _set_progress_value(self, value: int) -> None:
         """プログレスバーを更新し、UI反映を促す。"""
