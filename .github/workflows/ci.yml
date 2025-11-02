@@ -33,9 +33,11 @@ jobs:
             pip install -r requirements.txt
           }
 
-      - name: テストを実行
+      - name: テストを実行 (カバレッジ計測)
         shell: powershell
-        run: pytest
+        run: |
+          pytest --cov=. --cov-fail-under=90
+          coverage html
 
       - name: 型チェックを実行
         shell: powershell
