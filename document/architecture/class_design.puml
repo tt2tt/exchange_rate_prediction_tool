@@ -1,0 +1,140 @@
+@startuml class_design
+' 為替予想ツールの主要クラス構成
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+
+package "Core" {
+  class ApplicationController {
+    +load_dataset(path: str): None
+    +run_pipeline(lag: int, spread: float): None
+    +get_results(): PredictionResult
+  }
+
+  class PredictionResult {
+    +probability_up: float
+    +signal: str
+    +metrics: dict
+    +backtest_summary: dict
+  }
+
+  class CSVLoader {
+    +load(path: str): DataFrame
+  }
+
+  class DataValidator {
+    +validate_columns(df: DataFrame): None
+    +check_row_count(df: DataFrame, lag: int): None
+  }
+
+  class DataPreprocessor {
+    +sort(df: DataFrame): DataFrame
+    +clean(df: DataFrame): DataFrame
+    +apply_lag(df: DataFrame, lag: int): DataFrame
+  }
+
+  class FeatureEngineer {
+    +generate(df: DataFrame, lag: int): DataFrame
+  }
+
+  class ModelTrainer {
+    +train(features: DataFrame, labels: Series): TrainedModel
+    +time_series_cv(features: DataFrame, labels: Series): EvaluationReport
+  }
+
+  class EvaluationReport {
+    +accuracy: float
+    +precision: float
+    +recall: float
+    +roc_auc: float
+    +expected_value: float
+  }
+
+  class BacktestEngine {
+    +run(df: DataFrame, signals: Series, spread: float): BacktestReport
+  }
+
+  class BacktestReport {
+    +win_rate: float
+    +profit_factor: float
+    +max_drawdown: float
+    +total_return: float
+    +trades: list
+  }
+
+  class ModelRegistry {
+    +save(model: TrainedModel, path: str): None
+    +load(path: str): TrainedModel
+  }
+}
+
+package "Logging" {
+  class LogManager {
+    +get_logger(name: str): Logger
+    +rotate_logs(): None
+  }
+
+  class Logger {
+    +info(message: str): None
+    +warning(message: str): None
+    +error(message: str): None
+  }
+}
+
+package "UI (PySide6)" {
+  class MainWindow <<UI>> {
+    +select_file(): None
+    +set_parameters(lag: int, spread: float): None
+    +display_results(result: PredictionResult): None
+    +show_errors(messages: list): None
+  }
+
+  class ProgressDialog <<UI>> {
+    +update_progress(step: str, percent: int): None
+  }
+}
+
+ApplicationController --> CSVLoader : 使用
+ApplicationController --> DataValidator : 検証依頼
+ApplicationController --> DataPreprocessor : 前処理依頼
+ApplicationController --> FeatureEngineer : 特徴量生成
+ApplicationController --> ModelTrainer : 学習実行
+ApplicationController --> BacktestEngine : バックテスト実行
+ApplicationController --> ModelRegistry : モデル保存
+ApplicationController --> LogManager : ログ出力
+ApplicationController --> PredictionResult : 結果生成
+ModelTrainer --> EvaluationReport : 評価結果
+BacktestEngine --> BacktestReport : 集計
+LogManager --> Logger : ロガー提供
+MainWindow --> ApplicationController : 操作
+MainWindow --> ProgressDialog : 進捗表示
+ProgressDialog ..> Logger : ログ出力
+
+note right of ApplicationController
+  UI 操作から呼び出され、データ読込から
+  モデル保存・結果生成までの全工程を統括する。
+end note
+
+note bottom of DataPreprocessor
+  欠損・無限値処理や日付ソート、ラグ適用を
+  行って学習可能なデータセットを作成する。
+end note
+
+note top of FeatureEngineer
+  リターンや移動平均乖離率、クロス判定など
+  要件で定義された初期特徴量を生成する。
+end note
+
+note top of BacktestEngine
+  予測シグナルに基づき簡易バックテストを行い、
+  成績指標とトレード明細を算出する。
+end note
+
+note left of LogManager
+  日次ローテーションおよび30日保持の設定を
+  担当し、全モジュールのログを一元管理する。
+end note
+
+@enduml
