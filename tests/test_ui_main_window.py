@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pandas as pd
 import pytest
 from pytestqt.qtbot import QtBot  # type: ignore[import-not-found]
 from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit, QPushButton
@@ -45,3 +48,94 @@ def test_spread_input_has_default_value(qtbot: QtBot) -> None:
     assert spread_input.value() == pytest.approx(0.0005)
     assert spread_input.singleStep() == pytest.approx(0.0001)
     assert spread_input.maximum() == pytest.approx(0.01)
+
+
+def test_validate_dataframe_detects_missing_columns(qtbot: QtBot) -> None:
+    """必須カラム不足時にエラーメッセージが返ることを確認する。"""
+    window = _create_window(qtbot)
+    dataframe = pd.DataFrame({
+        "Date": pd.date_range("2024-01-01", periods=12, freq="D"),
+        "Open": range(12),
+        "High": range(12),
+        "Low": range(12),
+        "Close": range(12),
+    })
+
+    errors = window._validate_dataframe(dataframe)
+
+    assert any("必須カラム" in message for message in errors)
+
+
+def test_validate_dataframe_requires_min_rows(qtbot: QtBot) -> None:
+    """行数不足時にエラーが返ることを確認する。"""
+    window = _create_window(qtbot)
+    columns = {
+        "Date": pd.date_range("2024-01-01", periods=5, freq="D"),
+        "Open": range(5),
+        "High": range(5),
+        "Low": range(5),
+        "Close": range(5),
+        "MA5": range(5),
+        "MA25": range(5),
+        "MA75": range(5),
+    }
+    dataframe = pd.DataFrame(columns)
+
+    errors = window._validate_dataframe(dataframe)
+
+    assert any("データ件数" in message for message in errors)
+
+
+def test_on_execute_shows_error_when_file_missing(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファイル未選択時にエラーダイアログが呼び出されることを確認する。"""
+    window = _create_window(qtbot)
+
+    captured: dict[str, str | None] = {"error": None}
+
+    def fake_critical(parent, title, message):  # type: ignore[override]
+        captured["error"] = message
+
+    monkeypatch.setattr("ui.main_window.QMessageBox.critical", fake_critical)
+
+    window._on_execute()
+
+    assert captured["error"] is not None
+
+
+def test_on_execute_shows_info_when_validation_succeeds(
+    qtbot: QtBot,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """検証成功時に情報ダイアログが呼び出されることを確認する。"""
+
+    window = _create_window(qtbot)
+
+    dataframe = pd.DataFrame(
+        {
+            "Date": pd.date_range("2024-01-01", periods=12, freq="D"),
+            "Open": range(12),
+            "High": range(12),
+            "Low": range(12),
+            "Close": range(12),
+            "MA5": range(12),
+            "MA25": range(12),
+            "MA75": range(12),
+        }
+    )
+
+    monkeypatch.setattr(window, "_read_csv", lambda _: dataframe)
+    captured: dict[str, str | None] = {"info": None}
+
+    def fake_info(parent, title, message):  # type: ignore[override]
+        captured["info"] = message
+
+    monkeypatch.setattr("ui.main_window.QMessageBox.information", fake_info)
+
+    file_path = tmp_path / "sample.csv"
+    file_path.write_text("dummy")
+    window.file_path_input.setText(str(file_path))
+
+    window._on_execute()
+
+    assert captured["info"] is not None
