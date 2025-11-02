@@ -16,7 +16,7 @@
 
 ## フェーズ2: モデル学習と評価
 - [〇] ロジスティック回帰モデル学習フローを構築
-- [ ] TimeSeriesSplitによる検証と評価指標（Accuracy, Precision, Recall, ROC-AUC, 期待値計算）を実装
+- [〇] TimeSeriesSplitによる検証と評価指標（Accuracy, Precision, Recall, ROC-AUC, 期待値計算）を実装
 - [ ] 予測結果（上昇確率・判定）出力処理を実装
 - [ ] バックテストモジュール（スプレッド適用、勝率・PF・最大DD・総リターン算出）を実装
 - [ ] 学習済みモデル保存処理（`models/latest_model.joblib`）とログ出力（`logs/run_yyyymmdd_HHMM.txt`）を実装
