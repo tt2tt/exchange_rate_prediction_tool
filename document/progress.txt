@@ -6,3 +6,4 @@
 | 2025-11-02 | フェーズ0 | クラス設計を`document/architecture/class_design.puml`で管理 | 〇 | PlantUMLで主要コンポーネント構成を定義 |
 | 2025-11-02 | フェーズ0 | 想定ユーザーフローを`document/architecture/user_flow.puml`で管理 | 〇 | 起動から結果出力までの操作フローをPlantUMLで整理 |
 | 2025-11-02 | フェーズ0 | 仮想環境と依存関係の整備 | 〇 | requirements.txtとrequirements-dev.txtを追加しセットアップ手順を更新 |
+| 2025-11-02 | フェーズ0 | CI/CDパイプラインを追加し、develop/main向けタスクを自動化 | 〇 | GitHub Actionsでテスト・型チェック・デプロイ/リリースの雛形を構築 |
