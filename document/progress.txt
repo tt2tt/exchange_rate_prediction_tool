@@ -23,3 +23,4 @@
 | 2025-11-02 | フェーズ2 | バックテストモジュールを実装 | 〇 | core/model/backtester.pyとtests/test_backtester.pyを追加 |
 | 2025-11-02 | フェーズ2 | 学習済みモデル保存処理とログ出力を実装 | 〇 | core/model/model_persistence.pyと関連テストを追加 |
 | 2025-11-02 | フェーズ2 | バックテスト結果CSV出力を実装 | 〇 | core/model/backtest_csv_exporter.pyとtests/test_backtest_csv_exporter.pyを追加 |
+| 2025-11-02 | フェーズ3 | UIモックを作成し主要入力を配置 | 〇 | ui/main_window.pyとtests/test_ui_main_window.pyを追加 |
