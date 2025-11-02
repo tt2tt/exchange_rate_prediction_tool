@@ -3,7 +3,7 @@
 ## フェーズ0: 初期セットアップ
 - [〇] README.mdを作成してプロジェクト概要・利用方法を整理
 - [〇] クラス設計を作成し、`document/architecture/class_design.puml`で管理
-- [ ] 想定ユーザーフローのフローチャートを`document/architecture/user_flow.puml`で管理
+- [〇] 想定ユーザーフローのフローチャートを`document/architecture/user_flow.puml`で管理
 - [ ] 開発環境を構築し、仮想環境`venv`と依存関係を整備
 - [ ] CI/CDパイプラインを追加し、`develop`ブランチでテスト・型チェック・デプロイ、`main`ブランチでテスト・型チェック・デプロイ・リリースを自動化
 - [ ] ログ出力基盤を整備し、日次ローテーションと30日保持を実装
