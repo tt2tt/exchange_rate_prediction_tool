@@ -22,11 +22,12 @@
 - 言語・フレームワーク: Python 3.11+, PySide6, scikit-learn など
 - 仮想環境: `python -m venv venv`
 
-## セットアップ手順（予定）
+## セットアップ手順
 1. `python -m venv venv`
 2. `venv\Scripts\activate`
-3. `pip install -r requirements.txt`（追って作成）
-4. `python -m pip install --upgrade pip`（必要に応じて）
+3. `python -m pip install --upgrade pip`
+4. `pip install -r requirements.txt`
+5. （開発時）`pip install -r requirements-dev.txt`
 
 ## 実行フロー（概要）
 1. GUI で CSV ファイルを指定し、ラグ L とスプレッド S を入力
