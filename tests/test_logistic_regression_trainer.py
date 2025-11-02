@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
 from core.model import LogisticRegressionTrainer, TrainingConfig
+from core.model import ModelPersistenceManager
 
 
 def _build_linear_separable_dataset() -> tuple[pd.DataFrame, pd.Series]:
@@ -21,12 +25,13 @@ def _build_linear_separable_dataset() -> tuple[pd.DataFrame, pd.Series]:
     return features, target
 
 
-def test_train_returns_trained_pipeline() -> None:
+def test_train_returns_trained_pipeline(tmp_path: Path) -> None:
     """学習完了後に精度とメッセージが返ることを確認する。"""
     features, target = _build_linear_separable_dataset()
 
     # 既定設定でトレーナーを生成し、学習を実施する
-    trainer = LogisticRegressionTrainer()
+    manager = ModelPersistenceManager(model_dir=tmp_path / "models", log_dir=tmp_path / "logs")
+    trainer = LogisticRegressionTrainer(persistence_manager=manager)
     result = trainer.train(features, target)
 
     lr_model = result.estimator.named_steps["logistic_regression"]
@@ -36,15 +41,18 @@ def test_train_returns_trained_pipeline() -> None:
     assert result.accuracy == pytest.approx(1.0)
     assert result.label_mapping == {0: 0, 1: 1}
     assert "ロジスティック回帰モデルの学習が完了しました。" in result.messages[0]
+    assert result.model_path.exists()
+    assert result.log_path.exists()
 
 
-def test_train_respects_custom_config() -> None:
+def test_train_respects_custom_config(tmp_path: Path) -> None:
     """カスタム設定がロジスティック回帰へ反映されることを確認する。"""
     features, target = _build_linear_separable_dataset()
 
     # 高速収束のために反復回数を制限した設定を利用する
     config = TrainingConfig(max_iter=200, c_value=0.5, solver="lbfgs")
-    trainer = LogisticRegressionTrainer(config=config)
+    manager = ModelPersistenceManager(model_dir=tmp_path / "models", log_dir=tmp_path / "logs")
+    trainer = LogisticRegressionTrainer(config=config, persistence_manager=manager)
     result = trainer.train(features, target)
 
     lr_model = result.estimator.named_steps["logistic_regression"]
@@ -54,12 +62,36 @@ def test_train_respects_custom_config() -> None:
     assert lr_model.C == pytest.approx(0.5)
 
 
-def test_train_raises_when_target_is_single_class() -> None:
+def test_train_raises_when_target_is_single_class(tmp_path: Path) -> None:
     """ターゲットが単一クラスの場合に例外が発生することを確認する。"""
     features, _ = _build_linear_separable_dataset()
     target = pd.Series([1, 1, 1, 1, 1, 1], name="target")
 
-    trainer = LogisticRegressionTrainer()
+    manager = ModelPersistenceManager(model_dir=tmp_path / "models", log_dir=tmp_path / "logs")
+    trainer = LogisticRegressionTrainer(persistence_manager=manager)
 
     with pytest.raises(ValueError):
         trainer.train(features, target)
+
+
+def test_train_creates_expected_artifacts(tmp_path: Path) -> None:
+    """モデル保存とログ出力が所定の場所に行われることを確認する。"""
+
+    features, target = _build_linear_separable_dataset()
+    model_dir = tmp_path / "models"
+    log_dir = tmp_path / "logs"
+    manager = ModelPersistenceManager(model_dir=model_dir, log_dir=log_dir)
+
+    trainer = LogisticRegressionTrainer(persistence_manager=manager)
+    result = trainer.train(features, target)
+
+    expected_model_path = model_dir / "latest_model.joblib"
+    assert result.model_path == expected_model_path
+    assert expected_model_path.exists()
+
+    assert result.log_path.parent == log_dir
+    assert re.fullmatch(r"run_\d{8}_\d{4}\.txt", result.log_path.name)
+
+    log_content = result.log_path.read_text(encoding="utf-8")
+    assert "accuracy=" in log_content
+    assert "messages=" in log_content

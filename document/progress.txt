@@ -21,3 +21,4 @@
 | 2025-11-02 | フェーズ2 | TimeSeriesSplit評価と指標算出を実装 | 〇 | core/model/evaluation.pyとtests/test_model_evaluator.pyを追加 |
 | 2025-11-02 | フェーズ2 | 予測結果出力処理を実装 | 〇 | core/model/predictor.pyとtests/test_model_predictor.pyを追加 |
 | 2025-11-02 | フェーズ2 | バックテストモジュールを実装 | 〇 | core/model/backtester.pyとtests/test_backtester.pyを追加 |
+| 2025-11-02 | フェーズ2 | 学習済みモデル保存処理とログ出力を実装 | 〇 | core/model/model_persistence.pyと関連テストを追加 |

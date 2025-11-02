@@ -19,7 +19,7 @@
 - [〇] TimeSeriesSplitによる検証と評価指標（Accuracy, Precision, Recall, ROC-AUC, 期待値計算）を実装
 - [〇] 予測結果（上昇確率・判定）出力処理を実装
 - [〇] バックテストモジュール（スプレッド適用、勝率・PF・最大DD・総リターン算出）を実装
-- [ ] 学習済みモデル保存処理（`models/latest_model.joblib`）とログ出力（`logs/run_yyyymmdd_HHMM.txt`）を実装
+- [〇] 学習済みモデル保存処理（`models/latest_model.joblib`）とログ出力（`logs/run_yyyymmdd_HHMM.txt`）を実装
 - [ ] バックテスト結果CSV出力（エントリー/エグジット/損益）を実装
 
 ### テスト・品質保証

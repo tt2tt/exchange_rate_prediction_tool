@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping, Optional
 
 import numpy as np
@@ -11,6 +12,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+from .model_persistence import ModelPersistenceManager, ModelPersistenceResult
 
 
 @dataclass(frozen=True)
@@ -33,20 +36,29 @@ class TrainingResult:
     accuracy: float
     label_mapping: dict[int, Any]
     messages: list[str]
+    model_path: Path
+    log_path: Path
 
 
 class LogisticRegressionTrainer:
     """ロジスティック回帰モデルを学習させるクラス。"""
 
-    def __init__(self, config: Optional[TrainingConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[TrainingConfig] = None,
+        persistence_manager: Optional[ModelPersistenceManager] = None,
+    ) -> None:
         """学習に用いる設定を初期化する。
 
         Args:
             config: 事前に用意した学習設定。未指定の場合は既定値を利用する。
+            persistence_manager: モデル保存とログ出力を司るマネージャー。
         """
 
         # Configが渡されない場合は既定値を用いた設定を生成する
         self._config = config or TrainingConfig()
+        # 保存マネージャーが渡されない場合でも既定の保存処理を利用できるようにする
+        self._persistence_manager = persistence_manager or ModelPersistenceManager()
 
     def train(self, features: pd.DataFrame, target: pd.Series) -> TrainingResult:
         """ロジスティック回帰モデルを学習し結果を返す。
@@ -116,4 +128,21 @@ class LogisticRegressionTrainer:
             messages.append(f"ラベル変換: {label_mapping}")
         messages.append(f"学習データに対する精度: {train_accuracy:.4f}")
 
-        return TrainingResult(pipeline, train_accuracy, label_mapping, messages)
+        # 学習済みモデルを保存し、ログファイルに実行記録を残す
+        persistence_result: ModelPersistenceResult = self._persistence_manager.save(
+            estimator=pipeline,
+            messages=messages,
+            metadata={"accuracy": f"{train_accuracy:.6f}"},
+        )
+
+        messages.append(f"モデルを{persistence_result.model_path}へ保存しました。")
+        messages.append(f"ログを{persistence_result.log_path}へ出力しました。")
+
+        return TrainingResult(
+            estimator=pipeline,
+            accuracy=train_accuracy,
+            label_mapping=label_mapping,
+            messages=messages,
+            model_path=persistence_result.model_path,
+            log_path=persistence_result.log_path,
+        )
