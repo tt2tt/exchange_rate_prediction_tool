@@ -8,8 +8,13 @@ import pandas as pd
 import pytest
 from pytestqt.qtbot import QtBot  # type: ignore[import-not-found]
 from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit, QPushButton
+from sklearn.pipeline import Pipeline
 
-from ui.main_window import MainWindow
+from core.model.backtester import BacktestMetrics, BacktestResult
+from core.model.evaluation import EvaluationResult
+from core.model.logistic_regression_trainer import TrainingResult
+from core.model.predictor import PredictionResult
+from ui.main_window import ExecutionSummary, MainWindow
 
 
 def _create_window(qtbot: QtBot) -> MainWindow:
@@ -36,6 +41,14 @@ def test_main_window_has_core_widgets(qtbot: QtBot) -> None:
     execute_button = window.findChild(QPushButton, "executeButton")
     assert execute_button is not None
     assert execute_button.isEnabled()
+
+    # 進捗・ログ・結果ラベルの初期状態を確認する
+    assert window.progress_bar.value() == 0
+    assert window.log_output.toPlainText() == ""
+    assert "未実行" in window.evaluation_label.text()
+    assert "未実行" in window.training_label.text()
+    assert "未実行" in window.prediction_label.text()
+    assert "未実行" in window.backtest_label.text()
 
 
 def test_spread_input_has_default_value(qtbot: QtBot) -> None:
@@ -127,8 +140,68 @@ def test_on_execute_shows_info_when_validation_succeeds(
     monkeypatch.setattr(window, "_read_csv", lambda _: dataframe)
     captured: dict[str, str | None] = {"info": None}
 
-    def fake_execute(_: pd.DataFrame) -> str:
-        return "パイプラインが完了しました。"
+    evaluation_result = EvaluationResult(
+        fold_metrics=[],
+        overall_metrics={
+            "accuracy": 0.9,
+            "precision": 0.8,
+            "recall": 0.7,
+            "roc_auc": 0.6,
+            "expected_value": 0.05,
+        },
+        messages=["評価ログ"],
+    )
+    training_result = TrainingResult(
+        estimator=Pipeline([]),
+        accuracy=0.92,
+        label_mapping={0: 0, 1: 1},
+        messages=["学習ログ"],
+        model_path=tmp_path / "latest_model.joblib",
+        log_path=tmp_path / "run.log",
+    )
+    prediction_outputs = pd.DataFrame(
+        {
+            "probability_up": [0.6, 0.4],
+            "predicted_label": [1, 0],
+            "decision": [1, 0],
+        }
+    )
+    prediction_result = PredictionResult(outputs=prediction_outputs, messages=["予測ログ"])
+    backtest_metrics = BacktestMetrics(
+        total_return=0.12,
+        win_rate=0.6,
+        profit_factor=1.5,
+        max_drawdown=0.08,
+        gross_profit=0.2,
+        gross_loss=0.133,
+    )
+    trade_log = pd.DataFrame({"decision": [1], "net_return": [0.05]})
+    equity_curve = pd.Series([1.0, 1.05])
+    backtest_result = BacktestResult(
+        metrics=backtest_metrics,
+        trade_log=trade_log,
+        equity_curve=equity_curve,
+        messages=["バックテストログ"],
+    )
+    summary = ExecutionSummary(
+        messages=["処理完了メッセージ"],
+        evaluation_result=evaluation_result,
+        training_result=training_result,
+        prediction_result=prediction_result,
+        backtest_result=backtest_result,
+        export_path=tmp_path / "trades.csv",
+    )
+
+    def fake_execute(
+        _: pd.DataFrame,
+        progress_callback=None,
+        log_callback=None,
+    ) -> ExecutionSummary:
+        if progress_callback is not None:
+            progress_callback(100)
+        if log_callback is not None:
+            log_callback("処理完了メッセージ")
+        return summary
 
     monkeypatch.setattr(window, "_execute_pipeline", fake_execute)
 
@@ -143,7 +216,14 @@ def test_on_execute_shows_info_when_validation_succeeds(
 
     window._on_execute()
 
-    assert captured["info"] == "パイプラインが完了しました。"
+    assert captured["info"] == "処理が完了しました。"
+    assert window.progress_bar.value() == 100
+    assert "処理完了メッセージ" in window.log_output.toPlainText()
+    expected_eval = window._format_evaluation_summary(evaluation_result)
+    assert window.evaluation_label.text() == expected_eval
+    assert f"{training_result.accuracy:.3f}" in window.training_label.text()
+    assert str(len(prediction_outputs)) in window.prediction_label.text()
+    assert str(summary.export_path) in window.backtest_label.text()
 
 
 def test_prepare_learning_dataset_aligns_returns(qtbot: QtBot) -> None:

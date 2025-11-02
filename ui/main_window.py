@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import pandas as pd
 from pandas import DataFrame, Series
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QDoubleSpinBox,
     QFileDialog,
     QGroupBox,
@@ -17,7 +19,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -29,12 +33,27 @@ from core.model import (
     BacktestCSVExporter,
     BacktestConfig,
     Backtester,
+    BacktestResult,
     EvaluationConfig,
     EvaluationResult,
     LogisticRegressionTrainer,
     ModelEvaluator,
     Predictor,
+    TrainingResult,
+    PredictionResult,
 )
+
+
+@dataclass(frozen=True)
+class ExecutionSummary:
+    """パイプライン処理の要約情報をまとめるデータクラス。"""
+
+    messages: list[str]
+    evaluation_result: EvaluationResult
+    training_result: TrainingResult
+    prediction_result: PredictionResult
+    backtest_result: BacktestResult
+    export_path: Path
 
 
 class MainWindow(QMainWindow):
@@ -61,6 +80,7 @@ class MainWindow(QMainWindow):
         self._build_file_input_section()
         self._build_parameter_section()
         self._build_execute_section()
+        self._build_feedback_section()
 
         # UIイベントをセットアップする
         self._connect_signals()
@@ -125,6 +145,52 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.execute_button, alignment=Qt.AlignmentFlag.AlignRight)
 
         self._root_layout.addWidget(container)
+
+    def _build_feedback_section(self) -> None:
+        """進捗バーやログ、結果表示を構築する。"""
+        # 進捗バー表示用のグループボックスを用意する
+        progress_group = QGroupBox("進捗状況")
+        progress_layout = QVBoxLayout()
+        progress_group.setLayout(progress_layout)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        progress_layout.addWidget(self.progress_bar)
+
+        # ログ出力領域を構築する
+        log_group = QGroupBox("処理ログ")
+        log_layout = QVBoxLayout()
+        log_group.setLayout(log_layout)
+
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        log_layout.addWidget(self.log_output)
+
+        # サマリー結果を表示するラベルをまとめる
+        result_group = QGroupBox("結果サマリー")
+        result_layout = QVBoxLayout()
+        result_group.setLayout(result_layout)
+
+        self.evaluation_label = QLabel("評価結果は未実行です。")
+        self.evaluation_label.setWordWrap(True)
+        result_layout.addWidget(self.evaluation_label)
+
+        self.training_label = QLabel("学習結果は未実行です。")
+        self.training_label.setWordWrap(True)
+        result_layout.addWidget(self.training_label)
+
+        self.prediction_label = QLabel("予測結果は未実行です。")
+        self.prediction_label.setWordWrap(True)
+        result_layout.addWidget(self.prediction_label)
+
+        self.backtest_label = QLabel("バックテスト結果は未実行です。")
+        self.backtest_label.setWordWrap(True)
+        result_layout.addWidget(self.backtest_label)
+
+        self._root_layout.addWidget(progress_group)
+        self._root_layout.addWidget(log_group)
+        self._root_layout.addWidget(result_group)
         self._root_layout.addStretch(1)
 
     def _connect_signals(self) -> None:
@@ -168,9 +234,16 @@ class MainWindow(QMainWindow):
         if errors:
             self._show_error("\n".join(errors))
             return
+
+        # フィードバックエリアを初期化して進捗表示をリセットする
+        self._reset_feedback()
+
         try:
-            # 全処理フローを実行し、結果メッセージを取得する
-            summary = self._execute_pipeline(dataframe)
+            summary = self._execute_pipeline(
+                dataframe,
+                progress_callback=self._set_progress_value,
+                log_callback=self._append_log,
+            )
         except ValueError as exc:
             # 想定済みの入力不備はValueErrorとして扱い利用者へ通知する
             self._show_error(str(exc))
@@ -180,8 +253,9 @@ class MainWindow(QMainWindow):
             self._show_error(f"処理中に予期せぬエラーが発生しました: {exc}")
             return
 
-        # 正常終了時は統合メッセージを情報ダイアログで通知する
-        self._show_info(summary)
+        # 結果表示を更新し、完了メッセージを通知する
+        self._display_results(summary)
+        self._show_info("処理が完了しました。")
 
     def _validate_dataframe(self, dataframe: DataFrame) -> list[str]:
         """DataFrameを検証し、問題があればメッセージを返す。"""
@@ -216,51 +290,107 @@ class MainWindow(QMainWindow):
         self._last_error_message = None
         QMessageBox.information(self, "完了", message)
 
-    def _execute_pipeline(self, dataframe: DataFrame) -> str:
-        """前処理からバックテストまでの一連処理を実行する。"""
-        # 処理経過を蓄積し、最終的にユーザーへまとめて提示する
-        messages: list[str] = ["入力データの検証が完了しました。"]
+    def _reset_feedback(self) -> None:
+        """進捗バーやログ、結果表示を初期状態へ戻す。"""
+        self._set_progress_value(0)
+        self.log_output.clear()
+        self.evaluation_label.setText("評価結果は未実行です。")
+        self.training_label.setText("学習結果は未実行です。")
+        self.prediction_label.setText("予測結果は未実行です。")
+        self.backtest_label.setText("バックテスト結果は未実行です。")
 
-        # 前処理パイプラインでソートや検証整理を行う
+    def _set_progress_value(self, value: int) -> None:
+        """プログレスバーを更新し、UI反映を促す。"""
+        self.progress_bar.setValue(value)
+        QApplication.processEvents()
+
+    def _append_log(self, message: str) -> None:
+        """ログ表示領域へメッセージを追記する。"""
+        self.log_output.append(message)
+
+    def _display_results(self, summary: ExecutionSummary) -> None:
+        """処理結果サマリーを結果ラベルへ反映する。"""
+        evaluation_text = self._format_evaluation_summary(summary.evaluation_result)
+        self.evaluation_label.setText(evaluation_text)
+
+        training_text = (
+            f"学習精度: {summary.training_result.accuracy:.3f}"
+            f" / モデル保存先: {summary.training_result.model_path}"
+        )
+        self.training_label.setText(training_text)
+
+        prediction_text = self._format_prediction_summary(summary.prediction_result)
+        self.prediction_label.setText(prediction_text)
+
+        backtest_text = self._format_backtest_summary(summary.backtest_result, summary.export_path)
+        self.backtest_label.setText(backtest_text)
+
+    def _execute_pipeline(
+        self,
+        dataframe: DataFrame,
+        progress_callback: Optional[Callable[[int], None]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
+    ) -> ExecutionSummary:
+        """前処理からバックテストまでの一連処理を実行する。"""
+        messages: list[str] = []
+
+        def _record(message: str, progress: Optional[int] = None) -> None:
+            """内部ログを蓄積しつつUIへフィードバックする。"""
+            messages.append(message)
+            if log_callback is not None:
+                log_callback(message)
+            if progress_callback is not None and progress is not None:
+                progress_callback(progress)
+
+        _record("入力データの検証が完了しました。", progress=5)
+
         preprocessing = PreprocessingPipeline(self._validator)
+        _record("前処理を実行します。", progress=10)
         preprocessing_result = preprocessing.preprocess(dataframe)
         cleaned_df = preprocessing_result.dataframe
-        messages.extend(preprocessing_result.messages)
+        for message in preprocessing_result.messages:
+            _record(message)
+        _record("前処理が完了しました。", progress=20)
 
-        # 特徴量生成モジュールで学習用特徴量を構築する
         feature_engineer = FeatureEngineer(self._validator)
-        lag = 1
-        feature_result = feature_engineer.generate(cleaned_df, lag=lag)
+        _record("特徴量を生成します。", progress=25)
+        feature_result = feature_engineer.generate(cleaned_df, lag=1)
         features = feature_result.features
-        messages.extend(feature_result.messages)
+        for message in feature_result.messages:
+            _record(message)
         if features.empty:
             raise ValueError("特徴量生成に失敗しました。データのカラム構成を確認してください。")
+        _record("特徴量の生成が完了しました。", progress=35)
 
-        # 学習に利用する目的変数と実績リターンを整形する
         learning_features, target, actual_returns = self._prepare_learning_dataset(cleaned_df, features)
         if target.empty:
             raise ValueError("学習用データが空です。入力データ件数を確認してください。")
         if target.nunique(dropna=False) < 2:
             raise ValueError("目的変数が単一クラスのため学習できません。データ内容を見直してください。")
+        _record("学習用データセットを整形しました。", progress=45)
 
-        # 時系列分割でモデルの汎化性能を確認する
         evaluation_config = self._build_evaluation_config(len(learning_features))
+        _record("時系列交差検証を実行します。", progress=55)
         evaluator = ModelEvaluator(LogisticRegressionTrainer(), evaluation_config)
         evaluation_result = evaluator.evaluate(learning_features, target)
-        messages.extend(evaluation_result.messages)
-        messages.append(self._format_evaluation_summary(evaluation_result))
+        for message in evaluation_result.messages:
+            _record(message)
+        evaluation_summary = self._format_evaluation_summary(evaluation_result)
+        _record(evaluation_summary, progress=65)
 
-        # 全データで最終モデルを学習する
         trainer = LogisticRegressionTrainer()
+        _record("全データで最終モデルを学習します。", progress=70)
         training_result = trainer.train(learning_features, target)
-        messages.extend(training_result.messages)
+        for message in training_result.messages:
+            _record(message)
+        _record("モデル学習が完了しました。", progress=80)
 
-        # 学習済みモデルで推論結果を生成する
         predictor = Predictor(training_result=training_result)
+        _record("学習済みモデルで推論します。", progress=85)
         prediction_result = predictor.predict(learning_features)
-        messages.extend(prediction_result.messages)
+        for message in prediction_result.messages:
+            _record(message)
 
-        # 予測シグナルを用いてバックテストを実行する
         backtest_input = pd.DataFrame(
             {
                 "decision": prediction_result.outputs["decision"],
@@ -268,15 +398,23 @@ class MainWindow(QMainWindow):
             }
         )
         backtester = Backtester(BacktestConfig(spread=float(self.spread_input.value())))
+        _record("バックテストを実行します。", progress=90)
         backtest_result = backtester.run(backtest_input)
-        messages.extend(backtest_result.messages)
+        for message in backtest_result.messages:
+            _record(message)
 
-        # バックテスト結果をCSVに書き出し保存先を報告する
         exporter = BacktestCSVExporter()
         export_path = exporter.export(backtest_result)
-        messages.append(f"バックテスト結果を{export_path}へ出力しました。")
+        _record(f"バックテスト結果を{export_path}へ出力しました。", progress=100)
 
-        return "\n".join(messages)
+        return ExecutionSummary(
+            messages=messages,
+            evaluation_result=evaluation_result,
+            training_result=training_result,
+            prediction_result=prediction_result,
+            backtest_result=backtest_result,
+            export_path=export_path,
+        )
 
     def _prepare_learning_dataset(self, dataframe: DataFrame, features: DataFrame) -> Tuple[DataFrame, Series, Series]:
         """特徴量とターゲット・実績リターンをアライメントする。"""
@@ -318,5 +456,36 @@ class MainWindow(QMainWindow):
                 rec=_fmt(metrics.get("recall", float("nan"))),
                 auc=_fmt(metrics.get("roc_auc", float("nan"))),
                 exp=_fmt(metrics.get("expected_value", float("nan"))),
+            )
+        )
+
+    def _format_prediction_summary(self, result: PredictionResult) -> str:
+        """予測結果の統計をテキスト化する。"""
+        outputs = result.outputs
+        total = len(outputs)
+        if total == 0:
+            return "予測結果は空です。"
+
+        positive_rate = float(outputs["decision"].mean()) if "decision" in outputs else 0.0
+        average_prob = float(outputs["probability_up"].mean()) if "probability_up" in outputs else 0.0
+
+        return (
+            "予測件数: {count} / 上昇判定率: {rate:.3f} / 平均上昇確率: {prob:.3f}".format(
+                count=total,
+                rate=positive_rate,
+                prob=average_prob,
+            )
+        )
+
+    def _format_backtest_summary(self, result: BacktestResult, export_path: Path) -> str:
+        """バックテスト指標をテキスト化する。"""
+        metrics = result.metrics
+        return (
+            "総リターン: {ret:.4f} / 勝率: {win:.3f} / PF: {pf:.3f} / 最大DD: {dd:.4f} / CSV: {path}".format(
+                ret=metrics.total_return,
+                win=metrics.win_rate,
+                pf=metrics.profit_factor if pd.notna(metrics.profit_factor) else float("nan"),
+                dd=metrics.max_drawdown,
+                path=export_path,
             )
         )
