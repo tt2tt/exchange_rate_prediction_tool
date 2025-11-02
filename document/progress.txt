@@ -17,3 +17,9 @@
 | 2025-11-02 | フェーズ1 | 必須カラム検証・欠損値/無限値処理を実装 | 〇 | DataValidatorで検証ロジックを実装 |
 | 2025-11-02 | フェーズ1 | Date昇順ソート・ラグ適用の前処理パイプラインを実装 | 〇 | PreprocessingPipelineでソートと検証結果を管理 |
 | 2025-11-02 | フェーズ1 | 特徴量生成モジュールを実装 | 〇 | core/features/feature_engineer.pyとtests/test_feature_engineer.pyを追加 |
+| 2025-11-02 | フェーズ2 | ロジスティック回帰モデル学習フローを構築 | 〇 | core/model/logistic_regression_trainer.pyとテストを追加 |
+| 2025-11-02 | フェーズ2 | TimeSeriesSplit評価と指標算出を実装 | 〇 | core/model/evaluation.pyとtests/test_model_evaluator.pyを追加 |
+| 2025-11-02 | フェーズ2 | 予測結果出力処理を実装 | 〇 | core/model/predictor.pyとtests/test_model_predictor.pyを追加 |
+| 2025-11-02 | フェーズ2 | バックテストモジュールを実装 | 〇 | core/model/backtester.pyとtests/test_backtester.pyを追加 |
+| 2025-11-02 | フェーズ2 | 学習済みモデル保存処理とログ出力を実装 | 〇 | core/model/model_persistence.pyと関連テストを追加 |
+| 2025-11-02 | フェーズ2 | バックテスト結果CSV出力を実装 | 〇 | core/model/backtest_csv_exporter.pyとtests/test_backtest_csv_exporter.pyを追加 |
