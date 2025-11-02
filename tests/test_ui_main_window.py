@@ -127,6 +127,11 @@ def test_on_execute_shows_info_when_validation_succeeds(
     monkeypatch.setattr(window, "_read_csv", lambda _: dataframe)
     captured: dict[str, str | None] = {"info": None}
 
+    def fake_execute(_: pd.DataFrame) -> str:
+        return "パイプラインが完了しました。"
+
+    monkeypatch.setattr(window, "_execute_pipeline", fake_execute)
+
     def fake_info(parent, title, message):  # type: ignore[override]
         captured["info"] = message
 
@@ -138,4 +143,33 @@ def test_on_execute_shows_info_when_validation_succeeds(
 
     window._on_execute()
 
-    assert captured["info"] is not None
+    assert captured["info"] == "パイプラインが完了しました。"
+
+
+def test_prepare_learning_dataset_aligns_returns(qtbot: QtBot) -> None:
+    """学習用データセット整形でターゲットとリターンが揃うことを確認する。"""
+
+    window = _create_window(qtbot)
+
+    base_df = pd.DataFrame(
+        {
+            "Date": pd.date_range("2024-01-01", periods=6, freq="D"),
+            "Open": [100, 101, 100, 102, 101, 103],
+            "High": [101, 102, 101, 103, 102, 104],
+            "Low": [99, 100, 99, 101, 100, 102],
+            "Close": [100, 101, 100.5, 101, 99.5, 100.5],
+            "MA5": [100, 100.5, 100.6, 100.8, 100.7, 100.9],
+            "MA25": [100, 100.1, 100.2, 100.3, 100.4, 100.5],
+            "MA75": [100, 100.05, 100.1, 100.15, 100.2, 100.25],
+        }
+    )
+
+    features = pd.DataFrame({"feature_a": range(len(base_df))})
+
+    prepared_features, target, actual_returns = window._prepare_learning_dataset(base_df, features)
+
+    assert len(prepared_features) == len(base_df) - 1
+    assert prepared_features.index.equals(target.index)
+    assert actual_returns.index.equals(target.index)
+    assert set(target.unique()) <= {0, 1}
+    assert actual_returns.notna().all()

@@ -25,3 +25,4 @@
 | 2025-11-02 | フェーズ2 | バックテスト結果CSV出力を実装 | 〇 | core/model/backtest_csv_exporter.pyとtests/test_backtest_csv_exporter.pyを追加 |
 | 2025-11-02 | フェーズ3 | UIモックを作成し主要入力を配置 | 〇 | ui/main_window.pyとtests/test_ui_main_window.pyを追加 |
 | 2025-11-02 | フェーズ3 | 入力値検証とエラー表示を連携 | 〇 | UIでDataValidatorを呼び出し検証メッセージを表示 |
+| 2025-11-02 | フェーズ3 | 実行フロー連携：前処理→特徴量→学習→評価→バックテスト→出力 | 〇 | ui/main_window.pyで統合処理を実装 |

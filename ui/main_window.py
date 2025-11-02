@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
@@ -23,6 +23,18 @@ from PySide6.QtWidgets import (
 )
 
 from core.data.validator import DataValidator
+from core.data.preprocessing.pipeline import PreprocessingPipeline
+from core.features import FeatureEngineer
+from core.model import (
+    BacktestCSVExporter,
+    BacktestConfig,
+    Backtester,
+    EvaluationConfig,
+    EvaluationResult,
+    LogisticRegressionTrainer,
+    ModelEvaluator,
+    Predictor,
+)
 
 
 class MainWindow(QMainWindow):
@@ -134,7 +146,7 @@ class MainWindow(QMainWindow):
             self.file_path_input.setText(file_path)
 
     def _on_execute(self) -> None:
-        """入力値の検証を実行する。"""
+        """入力値の検証と実行フローを起動する。"""
         # ファイルパス未設定の場合は即座にエラーを通知する
         file_path = self.file_path_input.text().strip()
         if not file_path:
@@ -156,8 +168,20 @@ class MainWindow(QMainWindow):
         if errors:
             self._show_error("\n".join(errors))
             return
+        try:
+            # 全処理フローを実行し、結果メッセージを取得する
+            summary = self._execute_pipeline(dataframe)
+        except ValueError as exc:
+            # 想定済みの入力不備はValueErrorとして扱い利用者へ通知する
+            self._show_error(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001
+            # 予期しない例外は詳細を含めたエラーとして通知する
+            self._show_error(f"処理中に予期せぬエラーが発生しました: {exc}")
+            return
 
-        self._show_info("入力データの検証が完了しました。")
+        # 正常終了時は統合メッセージを情報ダイアログで通知する
+        self._show_info(summary)
 
     def _validate_dataframe(self, dataframe: DataFrame) -> list[str]:
         """DataFrameを検証し、問題があればメッセージを返す。"""
@@ -191,3 +215,108 @@ class MainWindow(QMainWindow):
         self._last_info_message = message
         self._last_error_message = None
         QMessageBox.information(self, "完了", message)
+
+    def _execute_pipeline(self, dataframe: DataFrame) -> str:
+        """前処理からバックテストまでの一連処理を実行する。"""
+        # 処理経過を蓄積し、最終的にユーザーへまとめて提示する
+        messages: list[str] = ["入力データの検証が完了しました。"]
+
+        # 前処理パイプラインでソートや検証整理を行う
+        preprocessing = PreprocessingPipeline(self._validator)
+        preprocessing_result = preprocessing.preprocess(dataframe)
+        cleaned_df = preprocessing_result.dataframe
+        messages.extend(preprocessing_result.messages)
+
+        # 特徴量生成モジュールで学習用特徴量を構築する
+        feature_engineer = FeatureEngineer(self._validator)
+        lag = 1
+        feature_result = feature_engineer.generate(cleaned_df, lag=lag)
+        features = feature_result.features
+        messages.extend(feature_result.messages)
+        if features.empty:
+            raise ValueError("特徴量生成に失敗しました。データのカラム構成を確認してください。")
+
+        # 学習に利用する目的変数と実績リターンを整形する
+        learning_features, target, actual_returns = self._prepare_learning_dataset(cleaned_df, features)
+        if target.empty:
+            raise ValueError("学習用データが空です。入力データ件数を確認してください。")
+        if target.nunique(dropna=False) < 2:
+            raise ValueError("目的変数が単一クラスのため学習できません。データ内容を見直してください。")
+
+        # 時系列分割でモデルの汎化性能を確認する
+        evaluation_config = self._build_evaluation_config(len(learning_features))
+        evaluator = ModelEvaluator(LogisticRegressionTrainer(), evaluation_config)
+        evaluation_result = evaluator.evaluate(learning_features, target)
+        messages.extend(evaluation_result.messages)
+        messages.append(self._format_evaluation_summary(evaluation_result))
+
+        # 全データで最終モデルを学習する
+        trainer = LogisticRegressionTrainer()
+        training_result = trainer.train(learning_features, target)
+        messages.extend(training_result.messages)
+
+        # 学習済みモデルで推論結果を生成する
+        predictor = Predictor(training_result=training_result)
+        prediction_result = predictor.predict(learning_features)
+        messages.extend(prediction_result.messages)
+
+        # 予測シグナルを用いてバックテストを実行する
+        backtest_input = pd.DataFrame(
+            {
+                "decision": prediction_result.outputs["decision"],
+                "actual_return": actual_returns.loc[prediction_result.outputs.index],
+            }
+        )
+        backtester = Backtester(BacktestConfig(spread=float(self.spread_input.value())))
+        backtest_result = backtester.run(backtest_input)
+        messages.extend(backtest_result.messages)
+
+        # バックテスト結果をCSVに書き出し保存先を報告する
+        exporter = BacktestCSVExporter()
+        export_path = exporter.export(backtest_result)
+        messages.append(f"バックテスト結果を{export_path}へ出力しました。")
+
+        return "\n".join(messages)
+
+    def _prepare_learning_dataset(self, dataframe: DataFrame, features: DataFrame) -> Tuple[DataFrame, Series, Series]:
+        """特徴量とターゲット・実績リターンをアライメントする。"""
+        # Close列から翌日のリターンを算出し、上昇可否をターゲットに変換する
+        close = dataframe["Close"].astype(float)
+        next_close = close.shift(-1)
+        forward_return = (next_close - close) / close
+        target = (forward_return > 0).astype(int)
+
+        # 特徴量・ターゲット・リターンを結合して欠損行を除去する
+        merged = features.copy()
+        merged["target"] = target
+        merged["actual_return"] = forward_return
+        merged = merged.dropna()
+
+        # 欠損除去後のデータを学習用に分割して返す
+        prepared_features = merged.drop(columns=["target", "actual_return"])
+        prepared_target = merged["target"].astype(int)
+        prepared_returns = merged["actual_return"].astype(float)
+        return prepared_features, prepared_target, prepared_returns
+
+    def _build_evaluation_config(self, sample_size: int) -> EvaluationConfig:
+        """データ件数に応じてTimeSeriesSplit設定を調整する。"""
+        # 分割数はサンプル件数に応じて上限を抑え、最低2分割を確保する
+        splits = max(2, min(5, max(2, sample_size // 4)))
+        return EvaluationConfig(n_splits=min(splits, max(2, sample_size - 1)))
+
+    def _format_evaluation_summary(self, result: EvaluationResult) -> str:
+        """評価指標からユーザー向けサマリー文字列を生成する。"""
+        # NaNを含む可能性があるため安全に文字列化する補助関数を定義する
+        def _fmt(value: float) -> str:
+            return "nan" if pd.isna(value) else f"{value:.3f}"
+
+        metrics = result.overall_metrics
+        return (
+            "評価結果: accuracy={acc}, precision={prec}, recall={rec}, roc_auc={auc}, expected={exp}".format(
+                acc=_fmt(metrics.get("accuracy", float("nan"))),
+                prec=_fmt(metrics.get("precision", float("nan"))),
+                rec=_fmt(metrics.get("recall", float("nan"))),
+                auc=_fmt(metrics.get("roc_auc", float("nan"))),
+                exp=_fmt(metrics.get("expected_value", float("nan"))),
+            )
+        )
