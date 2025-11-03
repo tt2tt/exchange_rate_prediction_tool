@@ -34,9 +34,9 @@
 - [〇] 運用ドキュメント整備（`document/operations/operations_guide.md`を追加）
 
 ### テスト・品質保証
-- [ ] CIで実行するテスト・型チェックスイートを構築
-- [ ] ユニットテスト・統合テスト・UIテスト（必要に応じて）を整備
-- [ ] バックテスト結果の検証ケースを作成
+- [〇] CIで実行するテスト・型チェックスイートを構築（`scripts/run_ci_checks.py`と`ci.yml`で統合実行）
+- [〇] ユニットテスト・統合テスト・UIテスト（必要に応じて）を整備（`tests/test_ui_main_window.py`へ統合テストを追加）
+- [〇] バックテスト結果の検証ケースを作成（`tests/test_backtester.py`で交互シグナルの評価を追加）
 
 ## リスクと検討事項
 - [ ] 特徴量・モデル拡張（RandomForest/LightGBM等）の検討
