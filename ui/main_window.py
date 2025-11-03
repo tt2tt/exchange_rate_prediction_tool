@@ -32,6 +32,7 @@ from matplotlib.figure import Figure
 from core.data.validator import DataValidator
 from core.data.preprocessing.pipeline import PreprocessingPipeline
 from core.features import FeatureEngineer
+from core.logging import LogManager
 from core.model import (
     BacktestCSVExporter,
     BacktestConfig,
@@ -60,12 +61,18 @@ class ExecutionSummary:
     chart_dataframe: DataFrame
 
 
+# 例外情報を確実に記録するためのモジュール共通ロガーを用意する
+LOGGER = LogManager().get_logger("ui.main_window")
+
+
 class MainWindow(QMainWindow):
     """アプリケーション全体をまとめるメインウィンドウ。"""
 
     def __init__(self) -> None:
         """ウィンドウとUIコンポーネントを初期化する。"""
         super().__init__()
+        # ログ出力用ロガーをインスタンスとして保持する
+        self._logger = LOGGER
         # ウィンドウタイトルで用途を明示する
         self.setWindowTitle("為替予測ツール")
         # 主要ウィジェットを生成する
@@ -241,6 +248,10 @@ class MainWindow(QMainWindow):
         try:
             dataframe = self._read_csv(path)
         except (OSError, ValueError, pd.errors.ParserError) as exc:  # type: ignore[attr-defined]
+            self._logger.exception(
+                "CSV読み込みに失敗しました。 path={file_path}",
+                file_path=str(path),
+            )
             self._show_error(f"CSVの読み込みに失敗しました: {exc}")
             return
 
@@ -260,10 +271,12 @@ class MainWindow(QMainWindow):
             )
         except ValueError as exc:
             # 想定済みの入力不備はValueErrorとして扱い利用者へ通知する
+            self._logger.warning("入力データの検証で想定内エラーが発生しました: {message}", message=str(exc))
             self._show_error(str(exc))
             return
         except Exception as exc:  # noqa: BLE001
             # 予期しない例外は詳細を含めたエラーとして通知する
+            self._logger.exception("処理中に予期しない例外が発生しました。")
             self._show_error(f"処理中に予期せぬエラーが発生しました: {exc}")
             return
 
@@ -290,7 +303,29 @@ class MainWindow(QMainWindow):
 
     def _read_csv(self, path: Path) -> DataFrame:
         """CSVファイルをDataFrameとして読み込む。"""
-        return pd.read_csv(path)
+        # 主要サポートエンコーディングを優先順位で試行する
+        encodings = ("utf-8", "cp932")
+        last_error: Optional[Exception] = None
+
+        for encoding in encodings:
+            try:
+                # エンコーディングを指定して読み込みを試みる
+                return pd.read_csv(path, encoding=encoding)
+            except UnicodeDecodeError as exc:
+                # 読み込み失敗時は次の候補で再試行する
+                self._logger.debug(
+                    "エンコーディング{encoding}でのCSV読み込みに失敗しました。", encoding=encoding
+                )
+                last_error = exc
+                continue
+
+        # いずれのエンコーディングでも失敗した場合はValueErrorで通知する
+        self._logger.error(
+            "サポート対象エンコーディングでCSVを読み込めませんでした。 path={file_path} error={error}",
+            file_path=str(path),
+            error=last_error,
+        )
+        raise ValueError(f"サポート外のエンコーディングです: {last_error}")
 
     def _show_error(self, message: str) -> None:
         """エラーメッセージをダイアログで通知する。"""
@@ -340,6 +375,8 @@ class MainWindow(QMainWindow):
 
         backtest_text = self._format_backtest_summary(summary.backtest_result, summary.export_path)
         self.backtest_label.setText(backtest_text)
+        # チャート描画用DataFrameが渡されている場合はミニチャートを更新する
+        self._render_chart(summary.chart_dataframe)
 
     def _execute_pipeline(
         self,
@@ -513,3 +550,62 @@ class MainWindow(QMainWindow):
                 path=export_path,
             )
         )
+
+    def _render_chart(self, chart_dataframe: DataFrame) -> None:
+        """ミニチャートへ終値・移動平均・シグナルを描画する。"""
+        # 描画前に既存の内容をクリアして毎回クリーンな状態で描く
+        self.chart_figure.clear()
+        axis = self.chart_figure.add_subplot(1, 1, 1)
+        axis.set_facecolor("#202020")
+
+        # データが空の場合はメッセージのみ表示して処理を終了する
+        if chart_dataframe.empty:
+            axis.text(0.5, 0.5, "チャート表示用のデータがありません。", color="#E5E5E5", ha="center", va="center")
+            self.chart_canvas.draw()
+            return
+
+        # 日付列が存在すれば時系列軸として利用し、無ければインデックスで代替する
+        x_axis = (
+            pd.to_datetime(chart_dataframe["Date"], errors="coerce")
+            if "Date" in chart_dataframe.columns
+            else chart_dataframe.index
+        )
+
+        # 終値ラインを描画して基準となる価格推移を表示する
+        if "Close" in chart_dataframe.columns:
+            axis.plot(x_axis, chart_dataframe["Close"].astype(float), label="終値", color="#4FC3F7")
+
+        # 移動平均線が存在する場合は補助線として重ねて傾向を把握しやすくする
+        for ma_col, color in (("MA5", "#AED581"), ("MA25", "#81C784"), ("MA75", "#4CAF50")):
+            if ma_col in chart_dataframe.columns:
+                axis.plot(x_axis, chart_dataframe[ma_col].astype(float), label=ma_col, color=color, linewidth=1.0)
+
+        # 売買シグナルが1となる位置にマーカーを描画してエントリーポイントを可視化する
+        if "decision" in chart_dataframe.columns and "Close" in chart_dataframe.columns:
+            decision_series = chart_dataframe["decision"].fillna(0).astype(int)
+            signal_mask = decision_series == 1
+            if signal_mask.any():
+                axis.scatter(
+                    x_axis[signal_mask],
+                    chart_dataframe.loc[signal_mask, "Close"].astype(float),
+                    marker="^",
+                    color="#FFB74D",
+                    edgecolor="#FFC107",
+                    s=50,
+                    label="シグナル",
+                )
+
+        # 凡例やグリッドを設定してチャートの読みやすさを向上させる
+        axis.set_title("終値とシグナルの推移", color="#E0E0E0")
+        handles, labels = axis.get_legend_handles_labels()
+        if handles:
+            axis.legend(loc="upper left", facecolor="#2A2A2A", edgecolor="#444444")
+        axis.grid(color="#404040", linestyle="--", linewidth=0.5)
+        for label in axis.get_xticklabels():
+            label.set_rotation(30)
+            label.set_horizontalalignment("right")
+        axis.tick_params(colors="#CCCCCC")
+        axis.spines["bottom"].set_color("#5A5A5A")
+        axis.spines["left"].set_color("#5A5A5A")
+
+        self.chart_canvas.draw()

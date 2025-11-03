@@ -5,8 +5,10 @@ __pycache__/
 *.pyd
 .coverage
 logs/run_*.txt
+logs/*.log
 latest_model.joblib
 build/
 dist/
 *.spec
 coverage.xml
+trades.csv
