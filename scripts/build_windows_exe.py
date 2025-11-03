@@ -57,7 +57,7 @@ def main() -> None:
     # サブプロセスとしてPyInstallerを起動しビルドを実行する
     subprocess.run(command, check=True, cwd=project_root)
     # 成果物の格納先を標準出力に表示して利用者へ案内する
-    print(f"ビルドが完了しました。distフォルダ内を確認してください: {dist_dir}")
+    print(f"Build complete. Check the dist folder: {dist_dir}")
 
 
 if __name__ == "__main__":
