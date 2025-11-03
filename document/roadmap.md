@@ -31,7 +31,7 @@
 
 ## フェーズ4: 配布と運用
 - [〇] Windows向けPySide6アプリのexeビルド手順を整備（`scripts/build_windows_exe.py`と`document/deployment/windows_exe_build.md`を追加）
-- [ ] 運用ドキュメント整備（ログ保守、モデル更新手順、バックテスト使用方法）
+- [〇] 運用ドキュメント整備（`document/operations/operations_guide.md`を追加）
 
 ### テスト・品質保証
 - [ ] CIで実行するテスト・型チェックスイートを構築
