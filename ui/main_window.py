@@ -290,7 +290,21 @@ class MainWindow(QMainWindow):
 
     def _read_csv(self, path: Path) -> DataFrame:
         """CSVファイルをDataFrameとして読み込む。"""
-        return pd.read_csv(path)
+        # 主要サポートエンコーディングを優先順位で試行する
+        encodings = ("utf-8", "cp932")
+        last_error: Optional[Exception] = None
+
+        for encoding in encodings:
+            try:
+                # エンコーディングを指定して読み込みを試みる
+                return pd.read_csv(path, encoding=encoding)
+            except UnicodeDecodeError as exc:
+                # 読み込み失敗時は次の候補で再試行する
+                last_error = exc
+                continue
+
+        # いずれのエンコーディングでも失敗した場合はValueErrorで通知する
+        raise ValueError(f"サポート外のエンコーディングです: {last_error}")
 
     def _show_error(self, message: str) -> None:
         """エラーメッセージをダイアログで通知する。"""
