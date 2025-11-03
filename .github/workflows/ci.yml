@@ -33,15 +33,9 @@ jobs:
             pip install -r requirements.txt
           }
 
-      - name: テストを実行 (カバレッジ計測)
+      - name: テスト・カバレッジ・型チェックを実行
         shell: powershell
-        run: |
-          pytest --cov=core --cov-fail-under=90
-          coverage html --ignore-errors
-
-      - name: 型チェックを実行
-        shell: powershell
-        run: mypy .
+        run: python scripts/run_ci_checks.py
 
       - name: デプロイ（仮実装）
         if: startsWith(github.ref, 'refs/heads/develop') || startsWith(github.ref, 'refs/heads/main')

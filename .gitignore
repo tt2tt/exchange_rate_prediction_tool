@@ -9,3 +9,4 @@ latest_model.joblib
 build/
 dist/
 *.spec
+coverage.xml

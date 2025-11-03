@@ -30,3 +30,4 @@
 | 2025-11-02 | フェーズ3 | （任意）ミニチャート描画キャンバスをUIに追加 | - | ui/main_window.pyでFigureCanvasを配置し初期化処理を追加 |
 | 2025-11-03 | フェーズ4 | Windows向けPySide6アプリのexeビルド手順を整備 | 〇 | scripts/build_windows_exe.pyとdocument/deployment/windows_exe_build.mdを作成 |
 | 2025-11-03 | フェーズ4 | 運用ドキュメント（ログ保守・モデル更新・バックテスト）を整備 | 〇 | document/operations/operations_guide.mdを作成 |
+| 2025-11-03 | テスト・品質保証 | CIで実行するテスト・型チェックスイートを構築 | 〇 | scripts/run_ci_checks.pyを追加しci.ymlから呼び出し |
