@@ -286,6 +286,13 @@ def test_execute_pipeline_generates_chart_dataframe(
     assert {"Close", "probability_up", "decision"}.issubset(summary.chart_dataframe.columns)
     assert summary.chart_dataframe.index.equals(summary.prediction_result.outputs.index)
 
+    # 結果表示を更新した際にチャート描画が行われることを確認する
+    window._display_results(summary)
+    assert len(window.chart_figure.axes) == 1
+    axis = window.chart_figure.axes[0]
+    assert any(line.get_label() == "終値" for line in axis.get_lines())
+    assert any(collection.get_label() == "シグナル" for collection in axis.collections)
+
 
 def test_prepare_learning_dataset_aligns_returns(qtbot: QtBot) -> None:
     """学習用データセット整形でターゲットとリターンが揃うことを確認する。"""
