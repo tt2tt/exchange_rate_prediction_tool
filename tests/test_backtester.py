@@ -51,3 +51,25 @@ def test_run_raises_when_no_trades() -> None:
 
     with pytest.raises(ValueError):
         backtester.run(trades)
+
+
+def test_backtester_generates_trades_when_signal_alternates() -> None:
+    """交互のシグナルでもトレードが生成されることを確認する。"""
+
+    config = BacktestConfig(spread=0.0005)
+    backtester = Backtester(config=config)
+
+    # 上昇シグナルが交互に現れる値動きを構築する
+    trades = pd.DataFrame(
+        {
+            "decision": [1, 1, 0, 1, 1, 0, 1],
+            "actual_return": [0.001, 0.002, -0.0005, 0.0007, 0.0015, -0.0002, 0.0009],
+        }
+    )
+
+    result = backtester.run(trades)
+
+    # トレードログが生成され、損益が計算されていることを検証する
+    assert not result.trade_log.empty
+    assert "net_return" in result.trade_log.columns
+    assert result.trade_log["net_return"].notna().all()
