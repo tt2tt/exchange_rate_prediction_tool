@@ -82,12 +82,15 @@ class FeatureEngineer:
 
         messages: list[str] = []
 
-        validation = self._validator.run_all(df)
-        if not validation.is_valid:
-            messages.extend(validation.messages)
+        column_result = self._validator.validate_columns(df)
+        if not column_result.is_valid:
+            messages.extend(column_result.messages)
             return FeatureResult(pd.DataFrame(index=df.index), messages)
 
         normalized = self._validator.normalize_columns(df)
+
+        missing_result = self._validator.validate_missing_values(normalized)
+        messages.extend(missing_result.messages)
 
         features = pd.DataFrame(index=normalized.index)
 
