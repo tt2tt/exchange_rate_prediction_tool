@@ -9,6 +9,8 @@ from typing import Any, Mapping, Sequence
 
 import joblib  # type: ignore[import-untyped]
 
+from core.logging import LogManager
+
 
 @dataclass(frozen=True)
 class ModelPersistenceResult:
@@ -16,6 +18,10 @@ class ModelPersistenceResult:
 
     model_path: Path
     log_path: Path
+
+
+# ログ保守処理の例外を記録するためのロガーを初期化する
+LOGGER = LogManager().get_logger("core.model.model_persistence")
 
 
 class ModelPersistenceManager:
@@ -82,7 +88,12 @@ class ModelPersistenceManager:
             try:
                 timestamp_str = stem.split("_", maxsplit=1)[1]
                 log_time = datetime.strptime(timestamp_str, "%Y%m%d_%H%M")
-            except (IndexError, ValueError):
+            except (IndexError, ValueError) as exc:
+                LOGGER.warning(
+                    "ログファイル名の解析に失敗しました。 file={file_path} error={error}",
+                    file_path=str(log_file),
+                    error=exc,
+                )
                 continue
             if log_time < cutoff:
                 log_file.unlink(missing_ok=True)

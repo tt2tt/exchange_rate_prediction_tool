@@ -32,6 +32,7 @@ from matplotlib.figure import Figure
 from core.data.validator import DataValidator
 from core.data.preprocessing.pipeline import PreprocessingPipeline
 from core.features import FeatureEngineer
+from core.logging import LogManager
 from core.model import (
     BacktestCSVExporter,
     BacktestConfig,
@@ -60,12 +61,18 @@ class ExecutionSummary:
     chart_dataframe: DataFrame
 
 
+# 例外情報を確実に記録するためのモジュール共通ロガーを用意する
+LOGGER = LogManager().get_logger("ui.main_window")
+
+
 class MainWindow(QMainWindow):
     """アプリケーション全体をまとめるメインウィンドウ。"""
 
     def __init__(self) -> None:
         """ウィンドウとUIコンポーネントを初期化する。"""
         super().__init__()
+        # ログ出力用ロガーをインスタンスとして保持する
+        self._logger = LOGGER
         # ウィンドウタイトルで用途を明示する
         self.setWindowTitle("為替予測ツール")
         # 主要ウィジェットを生成する
@@ -241,6 +248,10 @@ class MainWindow(QMainWindow):
         try:
             dataframe = self._read_csv(path)
         except (OSError, ValueError, pd.errors.ParserError) as exc:  # type: ignore[attr-defined]
+            self._logger.exception(
+                "CSV読み込みに失敗しました。 path={file_path}",
+                file_path=str(path),
+            )
             self._show_error(f"CSVの読み込みに失敗しました: {exc}")
             return
 
@@ -260,10 +271,12 @@ class MainWindow(QMainWindow):
             )
         except ValueError as exc:
             # 想定済みの入力不備はValueErrorとして扱い利用者へ通知する
+            self._logger.warning("入力データの検証で想定内エラーが発生しました: {message}", message=str(exc))
             self._show_error(str(exc))
             return
         except Exception as exc:  # noqa: BLE001
             # 予期しない例外は詳細を含めたエラーとして通知する
+            self._logger.exception("処理中に予期しない例外が発生しました。")
             self._show_error(f"処理中に予期せぬエラーが発生しました: {exc}")
             return
 
@@ -300,10 +313,18 @@ class MainWindow(QMainWindow):
                 return pd.read_csv(path, encoding=encoding)
             except UnicodeDecodeError as exc:
                 # 読み込み失敗時は次の候補で再試行する
+                self._logger.debug(
+                    "エンコーディング{encoding}でのCSV読み込みに失敗しました。", encoding=encoding
+                )
                 last_error = exc
                 continue
 
         # いずれのエンコーディングでも失敗した場合はValueErrorで通知する
+        self._logger.error(
+            "サポート対象エンコーディングでCSVを読み込めませんでした。 path={file_path} error={error}",
+            file_path=str(path),
+            error=last_error,
+        )
         raise ValueError(f"サポート外のエンコーディングです: {last_error}")
 
     def _show_error(self, message: str) -> None:
