@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Tuple
+
+import re
 
 import numpy as np
 import pandas as pd
 
-from .constants import COLUMN_ALIASES, REQUIRED_COLUMNS
+from .constants import COLUMN_ALIASES, PATTERN_COLUMN_ALIASES, REQUIRED_COLUMNS
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,10 @@ class DataValidator:
         if column_aliases:
             default_aliases.update(column_aliases)
         self._column_aliases = default_aliases
+        # 正規表現で括弧内の表記揺れを吸収するためのパターンを事前に準備する
+        self._pattern_aliases: Tuple[tuple[re.Pattern[str], str], ...] = tuple(
+            (re.compile(pattern), target) for pattern, target in PATTERN_COLUMN_ALIASES
+        )
 
     def normalize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """別名カラムを内部名称にリネームしたDataFrameを返す。"""
@@ -43,6 +49,17 @@ class DataValidator:
             for col in df.columns
             if col in self._column_aliases
         }
+        # 正規表現にマッチする列も内部名へリネームする
+        for col in df.columns:
+            if col in rename_map:
+                continue
+            for pattern, target in self._pattern_aliases:
+                if pattern.match(col):
+                    # 既に内部名が存在する場合は衝突を避けてスキップする
+                    if target in df.columns:
+                        break
+                    rename_map[col] = target
+                    break
         if not rename_map:
             return df.copy()
         normalized = df.copy()
@@ -52,11 +69,17 @@ class DataValidator:
     def validate_columns(self, df: pd.DataFrame) -> ValidationResult:
         """必須カラムが揃っているかを検証する。"""
         available = set()
+
         for col in df.columns:
             if col in self._required_columns:
                 available.add(col)
             elif col in self._column_aliases:
                 available.add(self._column_aliases[col])
+            else:
+                for pattern, target in self._pattern_aliases:
+                    if pattern.match(col):
+                        available.add(target)
+                        break
 
         missing = [col for col in self._required_columns if col not in available]
         if missing:
