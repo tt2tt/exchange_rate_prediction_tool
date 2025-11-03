@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from pytestqt.qtbot import QtBot  # type: ignore[import-not-found]
 from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit, QPushButton
 from sklearn.pipeline import Pipeline
 
+from core.model.backtest_csv_exporter import BacktestCSVExporter
 from core.model.backtester import BacktestMetrics, BacktestResult
 from core.model.evaluation import EvaluationResult
 from core.model.logistic_regression_trainer import TrainingResult
@@ -24,6 +26,37 @@ def _create_window(qtbot: QtBot) -> MainWindow:
     qtbot.addWidget(main_window)
     main_window.show()
     return main_window
+
+
+def _build_sample_dataframe(row_count: int = 80) -> pd.DataFrame:
+    """パイプライン検証用のダミー為替データを生成する。"""
+    # テスト用に上昇と下落が交互に現れる価格系列を作成する
+    dates = pd.date_range("2024-01-01", periods=row_count, freq="D")
+    pattern = np.array([1.5, -1.2, 1.0, -1.0], dtype=float)
+    increments = np.resize(pattern, row_count)
+    close = 100.0 + np.cumsum(increments)
+    open_ = close - (increments * 0.2)
+    high = close + 0.6
+    low = close - 0.8
+
+    # 移動平均は欠損を出さないよう最小期間を1に設定する
+    close_series = pd.Series(close)
+    ma5 = close_series.rolling(window=5, min_periods=1).mean()
+    ma25 = close_series.rolling(window=25, min_periods=1).mean()
+    ma75 = close_series.rolling(window=45, min_periods=1).mean()
+
+    return pd.DataFrame(
+        {
+            "Date": dates,
+            "Open": open_,
+            "High": high,
+            "Low": low,
+            "Close": close,
+            "MA5": ma5,
+            "MA25": ma25,
+            "MA75": ma75,
+        }
+    )
 
 
 def test_main_window_has_core_widgets(qtbot: QtBot) -> None:
@@ -225,6 +258,33 @@ def test_on_execute_shows_info_when_validation_succeeds(
     assert f"{training_result.accuracy:.3f}" in window.training_label.text()
     assert str(len(prediction_outputs)) in window.prediction_label.text()
     assert str(summary.export_path) in window.backtest_label.text()
+
+
+def test_execute_pipeline_generates_chart_dataframe(
+    qtbot: QtBot,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """パイプライン実行でチャート描画用データが生成されることを確認する。"""
+
+    window = _create_window(qtbot)
+
+    # バックテストCSV出力は一時パスへ書き出すよう差し替える
+    def _fake_export(self: BacktestCSVExporter, result, output_path=None):  # type: ignore[override]
+        export_file = tmp_path / "trades.csv"
+        export_file.write_text("entry_index,exit_index,direction,net_return,duration\n", encoding="utf-8")
+        return export_file
+
+    monkeypatch.setattr(BacktestCSVExporter, "export", _fake_export, raising=False)
+
+    dataframe = _build_sample_dataframe()
+
+    summary = window._execute_pipeline(dataframe)
+
+    # チャート用DataFrameが空でなく、主要カラムを含むことを検証する
+    assert not summary.chart_dataframe.empty
+    assert {"Close", "probability_up", "decision"}.issubset(summary.chart_dataframe.columns)
+    assert summary.chart_dataframe.index.equals(summary.prediction_result.outputs.index)
 
 
 def test_prepare_learning_dataset_aligns_returns(qtbot: QtBot) -> None:
