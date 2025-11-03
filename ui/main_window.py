@@ -407,6 +407,13 @@ class MainWindow(QMainWindow):
         for message in prediction_result.messages:
             _record(message)
 
+        # チャート描画用に予測結果と終値をまとめたDataFrameを構築する
+        chart_dataframe = cleaned_df.loc[prediction_result.outputs.index].copy()
+        chart_dataframe["probability_up"] = prediction_result.outputs["probability_up"]
+        chart_dataframe["decision"] = prediction_result.outputs["decision"]
+        if "decision_label" in prediction_result.outputs:
+            chart_dataframe["decision_label"] = prediction_result.outputs["decision_label"]
+
         backtest_input = pd.DataFrame(
             {
                 "decision": prediction_result.outputs["decision"],
@@ -430,6 +437,7 @@ class MainWindow(QMainWindow):
             prediction_result=prediction_result,
             backtest_result=backtest_result,
             export_path=export_path,
+            chart_dataframe=chart_dataframe,
         )
 
     def _prepare_learning_dataset(self, dataframe: DataFrame, features: DataFrame) -> Tuple[DataFrame, Series, Series]:

@@ -190,6 +190,7 @@ def test_on_execute_shows_info_when_validation_succeeds(
         prediction_result=prediction_result,
         backtest_result=backtest_result,
         export_path=tmp_path / "trades.csv",
+        chart_dataframe=prediction_outputs,
     )
 
     def fake_execute(
