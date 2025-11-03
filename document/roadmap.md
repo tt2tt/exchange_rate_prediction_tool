@@ -30,9 +30,8 @@
 - [〇] （任意）終値・MAとシグナルのミニチャート描画を実装（キャンバス配置・初期化まで完了）
 
 ## フェーズ4: 配布と運用
-- [ ] Windows向けPySide6アプリのexeビルド手順を整備
-- [ ] Web版展開を検討し、初期画面表示時のデプロイ＆自動デプロイ設定を検証（必要なら）
-- [ ] 運用ドキュメント整備（ログ保守、モデル更新手順、バックテスト使用方法）
+- [〇] Windows向けPySide6アプリのexeビルド手順を整備（`scripts/build_windows_exe.py`と`document/deployment/windows_exe_build.md`を追加）
+- [〇] 運用ドキュメント整備（`document/operations/operations_guide.md`を追加）
 
 ### テスト・品質保証
 - [ ] CIで実行するテスト・型チェックスイートを構築

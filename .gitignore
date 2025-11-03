@@ -6,3 +6,6 @@ __pycache__/
 .coverage
 logs/run_*.txt
 latest_model.joblib
+build/
+dist/
+*.spec
