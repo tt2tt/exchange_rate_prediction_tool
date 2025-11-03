@@ -33,20 +33,41 @@ jobs:
             pip install -r requirements.txt
           }
 
-      - name: テストを実行
+      - name: テスト・カバレッジ・型チェックを実行
         shell: powershell
-        run: pytest
+        run: python scripts/run_ci_checks.py
 
-      - name: 型チェックを実行
-        shell: powershell
-        run: mypy .
-
-      - name: デプロイ（仮実装）
+      - name: Windows向け実行ファイルをビルド
         if: startsWith(github.ref, 'refs/heads/develop') || startsWith(github.ref, 'refs/heads/main')
         shell: powershell
-        run: echo "デプロイ処理は今後実装予定です"
+        run: python scripts/build_windows_exe.py
 
-      - name: リリース（仮実装）
+      - name: ビルド成果物をアップロード
+        if: startsWith(github.ref, 'refs/heads/develop') || startsWith(github.ref, 'refs/heads/main')
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/*
+
+      - name: GitHubリリースを作成
         if: github.ref == 'refs/heads/main'
-        shell: powershell
-        run: echo "リリース処理は今後実装予定です"
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: release-${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+      - name: リリースに成果物を添付
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/exchange_rate_prediction_tool.exe
+          asset_name: exchange_rate_prediction_tool.exe
+          asset_content_type: application/octet-stream

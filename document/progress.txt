@@ -14,3 +14,22 @@
 | 2025-11-02 | フェーズ0 | 仮想環境と依存関係の整備 | 〇 | requirements.txtとrequirements-dev.txtを追加しセットアップ手順を更新 |
 | 2025-11-02 | フェーズ0 | CI/CDパイプラインを追加し、develop/main向けタスクを自動化 | 〇 | GitHub Actionsでテスト・型チェック・デプロイ/リリースの雛形を構築 |
 | 2025-11-02 | フェーズ0 | ログ出力基盤を整備し、日次ローテーションと30日保持を実装 | 〇 | LogManagerでloguru設定を統一しテストを追加 |
+| 2025-11-02 | フェーズ1 | 必須カラム検証・欠損値/無限値処理を実装 | 〇 | DataValidatorで検証ロジックを実装 |
+| 2025-11-02 | フェーズ1 | Date昇順ソート・ラグ適用の前処理パイプラインを実装 | 〇 | PreprocessingPipelineでソートと検証結果を管理 |
+| 2025-11-02 | フェーズ1 | 特徴量生成モジュールを実装 | 〇 | core/features/feature_engineer.pyとtests/test_feature_engineer.pyを追加 |
+| 2025-11-02 | フェーズ2 | ロジスティック回帰モデル学習フローを構築 | 〇 | core/model/logistic_regression_trainer.pyとテストを追加 |
+| 2025-11-02 | フェーズ2 | TimeSeriesSplit評価と指標算出を実装 | 〇 | core/model/evaluation.pyとtests/test_model_evaluator.pyを追加 |
+| 2025-11-02 | フェーズ2 | 予測結果出力処理を実装 | 〇 | core/model/predictor.pyとtests/test_model_predictor.pyを追加 |
+| 2025-11-02 | フェーズ2 | バックテストモジュールを実装 | 〇 | core/model/backtester.pyとtests/test_backtester.pyを追加 |
+| 2025-11-02 | フェーズ2 | 学習済みモデル保存処理とログ出力を実装 | 〇 | core/model/model_persistence.pyと関連テストを追加 |
+| 2025-11-02 | フェーズ2 | バックテスト結果CSV出力を実装 | 〇 | core/model/backtest_csv_exporter.pyとtests/test_backtest_csv_exporter.pyを追加 |
+| 2025-11-02 | フェーズ3 | UIモックを作成し主要入力を配置 | 〇 | ui/main_window.pyとtests/test_ui_main_window.pyを追加 |
+| 2025-11-02 | フェーズ3 | 入力値検証とエラー表示を連携 | 〇 | UIでDataValidatorを呼び出し検証メッセージを表示 |
+| 2025-11-02 | フェーズ3 | 実行フロー連携：前処理→特徴量→学習→評価→バックテスト→出力 | 〇 | ui/main_window.pyで統合処理を実装 |
+| 2025-11-02 | フェーズ3 | 進捗バー・ログ表示・結果セクション（予測・検証・バックテスト）を実装 | 〇 | ui/main_window.pyとtests/test_ui_main_window.pyを更新 |
+| 2025-11-02 | フェーズ3 | （任意）ミニチャート描画キャンバスをUIに追加 | 〇 | ui/main_window.pyでFigureCanvasと描画ロジックを整備 |
+| 2025-11-03 | フェーズ4 | Windows向けPySide6アプリのexeビルド手順を整備 | 〇 | scripts/build_windows_exe.pyとdocument/deployment/windows_exe_build.mdを作成 |
+| 2025-11-03 | フェーズ4 | 運用ドキュメント（ログ保守・モデル更新・バックテスト）を整備 | 〇 | document/operations/operations_guide.mdを作成 |
+| 2025-11-03 | テスト・品質保証 | CIで実行するテスト・型チェックスイートを構築 | 〇 | scripts/run_ci_checks.pyを追加しci.ymlから呼び出し |
+| 2025-11-03 | テスト・品質保証 | ユニット・統合・UIテストを拡充 | 〇 | tests/test_ui_main_window.pyにパイプライン統合テストを追加 |
+| 2025-11-03 | テスト・品質保証 | バックテスト結果の検証ケースを追加 | 〇 | tests/test_backtester.pyでシグナル交互パターンを検証 |
